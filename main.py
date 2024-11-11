@@ -23,14 +23,14 @@ class FeedbackRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     print("Inicio de la aplicación: ejecutando scraping de datos de la web...")
-    fetch_and_save_web_data()  # Ejecuta el scraping y guarda en MongoDB si no hay duplicados
+    await fetch_and_save_web_data()  # Ejecuta el scraping y guarda en MongoDB si no hay duplicados
     print("Datos de la web procesados.")
 
-def get_ranked_answers(question, context_list):
+def get_ranked_answers(question: str, context_list: List[str]):
     ranked_answers = []
     for context in context_list:
         result = qa_pipeline(question=question, context=context)
-        ranked_answers.append({'answer': context, 'score': result['score']})
+        ranked_answers.append({'answer': result['answer'], 'score': result['score']})
     return sorted(ranked_answers, key=lambda x: x['score'], reverse=True)
 
 @app.post("/ask")
@@ -39,7 +39,8 @@ async def ask_question(request: QuestionRequest):
     all_answers = []
 
     # Recupera todas las respuestas en MongoDB
-    async for doc in questions_collection.find():
+    docs = await questions_collection.find().to_list(length=100)  # Obtiene los documentos en formato de lista
+    for doc in docs:
         if "answer" in doc:
             all_answers.append(doc["answer"])
 
@@ -57,7 +58,6 @@ async def ask_question(request: QuestionRequest):
 @app.post("/feedback")
 async def feedback(request: FeedbackRequest):
     await save_feedback(request.question, request.chosen_answer)
-    
     return {"message": "Feedback guardado con éxito"}
 
 @app.get("/")
